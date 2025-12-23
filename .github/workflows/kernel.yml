@@ -1,37 +1,44 @@
-name: Build LG V60 Kernel (Auto-Branch)
+name: Build Kernel (r547379)
+
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
+    - name: Checkout source
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
 
-      # --- FIX FOR UBUNTU 24.04: Manually Setup Python 2.7 ---
-      - name: Setup Python 2.7
-        uses: actions/setup-python@v5
-        with:
-          python-version: '2.7'
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential git curl wget bison flex zip bc cpio \
+        libssl-dev tar python3 device-tree-compiler libelf-dev
 
-      - name: Install Build Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev \
-          git-core gnupg ccache lzop python-is-python3 \
-          python3-pip zip curl zlib1g-dev libncurses5-dev \
-          libgl1-mesa-dev g++-multilib libxml2-utils xsltproc \
-          unzip device-tree-compiler gcc-aarch64-linux-gnu \
-          gcc-arm-linux-gnueabi lld llvm clang libtool-bin \
-          automake autoconf libarchive-tools tar
+    - name: Setup Google Clang (r547379)
+      run: |
+        mkdir -p $HOME/toolchains/clang
+        cd $HOME/toolchains/clang
+        wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz
+        tar -zxf clang-r547379.tar.gz
+        cd $GITHUB_WORKSPACE
 
-      - name: Run Build Script
-        run: bash build.sh
+    - name: Build kernel
+      run: |
+        # Pass the toolchain path to your script
+        export CLANG_PATH=$HOME/toolchains/clang
+        bash build.sh
 
-      - name: Upload Kernel ZIP
-        uses: actions/upload-artifact@v4
-        with:
-          name: LGV60-Jhatpat-Kernel
-          path: LGV60-Kernel.zip
-          
+    - name: Upload Kernel Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: LGV60-Kernel-Build
+        path: |
+          *.zip
+          out/arch/arm64/boot/Image
+          out/arch/arm64/boot/dts/vendor/qcom/*.dtb
+        if-no-files-found: warn
