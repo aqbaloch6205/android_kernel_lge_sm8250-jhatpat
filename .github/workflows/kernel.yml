@@ -32,21 +32,21 @@ jobs:
 
       - name: Build Kernel
         env:
-          # We place the system bin folder FIRST so the build uses the system's 'ld' (linker)
-          # while still using Proton Clang for the actual compilation.
           PATH: /usr/bin:${{ github.workspace }}/toolchain/bin:/bin
         run: |
+          # 1. Configuration
           DEFCONFIG="vendor/kona-perf_defconfig"
+          CUSTOM_NAME="-jhatpat-Kernel-beta1.0" 
           
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           
-          # Initialize Config
+          # 2. Initialize Config
           make O=out $DEFCONFIG
           
-          # Compile
-          # Notice we explicitly tell it to use the system linker (LD=ld.lld or LD=ld)
+          # 3. Compile Kernel and DTBs
+          # Note: We added 'dtbs' to the targets
           make -j$(nproc --all) O=out \
                ARCH=arm64 \
                CC=clang \
@@ -58,11 +58,16 @@ jobs:
                STRIP=llvm-strip \
                CROSS_COMPILE=$CROSS_COMPILE \
                CROSS_COMPILE_ARM32=$CROSS_COMPILE_ARM32 \
-               Image.gz
+               LOCALVERSION=$CUSTOM_NAME \
+               Image.gz dtbs
+
+          # 4. Create Image.gz-dtb
+          # This joins the Image.gz and all generated DTBs into one file
+          cat out/arch/arm64/boot/Image.gz $(find out/arch/arm64/boot/dts/vendor -name "*.dtb") > out/arch/arm64/boot/Image.gz-dtb
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-v${{ steps.info.outputs.KVER }}
-          path: out/arch/arm64/boot/Image.gz
-          
+          name: Kernel-v${{ steps.info.outputs.KVER }}-Custom
+          path: out/arch/arm64/boot/Image.gz-dtb
+
