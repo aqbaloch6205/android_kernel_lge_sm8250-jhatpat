@@ -36,7 +36,7 @@ jobs:
           # while still using Proton Clang for the actual compilation.
           PATH: /usr/bin:${{ github.workspace }}/toolchain/bin:/bin
         run: |
-          DEFCONFIG="vendor/timelm_defconfig"
+          DEFCONFIG="vendor/kona-perf_defconfig"
           
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
