@@ -1,44 +1,63 @@
-name: Build Kernel (r547379)
+name: LG SM8250 Kernel Build
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Allows you to start the build with a button click
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout source
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y build-essential git curl wget bison flex zip bc cpio \
-        libssl-dev tar python3 device-tree-compiler libelf-dev
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential flex git libssl-dev libncurses5-dev zip python3
 
-    - name: Setup Google Clang (r547379)
-      run: |
-        mkdir -p $HOME/toolchains/clang
-        cd $HOME/toolchains/clang
-        wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz
-        tar -zxf clang-r547379.tar.gz
-        cd $GITHUB_WORKSPACE
+      - name: Fetch Toolchain
+        run: |
+          # Cloning Proton Clang (optimized for Snapdragon 865)
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git toolchain
 
-    - name: Build kernel
-      run: |
-        # Pass the toolchain path to your script
-        export CLANG_PATH=$HOME/toolchains/clang
-        bash build.sh
+      - name: Detect Kernel Version
+        id: info
+        run: |
+          # Read versioning details directly from the Makefile
+          V=$(grep "^VERSION =" Makefile | awk '{print $3}')
+          P=$(grep "^PATCHLEVEL =" Makefile | awk '{print $3}')
+          S=$(grep "^SUBLEVEL =" Makefile | awk '{print $3}')
+          EXTRA=$(grep "^EXTRAVERSION =" Makefile | awk '{print $3}')
+          echo "KVER=$V.$P.$S$EXTRA" >> $GITHUB_OUTPUT
 
-    - name: Upload Kernel Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: LGV60-Kernel-Build
-        path: |
-          *.zip
-          out/arch/arm64/boot/Image
-          out/arch/arm64/boot/dts/vendor/qcom/*.dtb
-        if-no-files-found: warn
+      - name: Build Kernel
+        env:
+          PATH: ${{ github.workspace }}/toolchain/bin:/usr/bin:/bin
+        run: |
+          # Standard LG SM8250 Defconfig (Change if your device uses a specific one)
+          DEFCONFIG="vendor/timelm_defconfig"
+          
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          
+          # Initialize Config
+          make O=out $DEFCONFIG
+          
+          # Compile only the kernel image
+          make -j$(nproc --all) O=out \
+               CC=clang \
+               CROSS_COMPILE=$CROSS_COMPILE \
+               CROSS_COMPILE_ARM32=$CROSS_COMPILE_ARM32 \
+               AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy \
+               OBJDUMP=llvm-objdump STRIP=llvm-strip \
+               Image.gz
+
+      - name: Upload Kernel Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-v${{ steps.info.outputs.KVER }}
+          path: out/arch/arm64/boot/Image.gz
+          
