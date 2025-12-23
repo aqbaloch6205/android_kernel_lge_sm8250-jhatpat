@@ -1,51 +1,27 @@
 #!/bin/bash
 
-# --- CONFIGURATION ---
-# No branch specified -> Clones the default branch automatically
+# --- CONFIG ---
 KERNEL_REPO="https://github.com/aqbaloch6205/android_kernel_lge_sm8250-jhatpat.git"
-CLANG_REPO="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86"
 AK3_REPO="https://github.com/osm0sis/AnyKernel3"
+DEFCONFIG="vendor/kona-perf_defconfig"
 
-# --- 1. SETUP WORKSPACE ---
-echo "--- Cleaning and Setting Up ---"
-mkdir -p build && cd build
-
-echo "Cloning Kernel (Default Branch)..."
-git clone --depth=1 $KERNEL_REPO kernel
-
-echo "Cloning Clang..."
-git clone --depth=1 $CLANG_REPO -b master clang
-
-echo "Cloning AnyKernel3..."
-git clone --depth=1 $AK3_REPO anykernel
-
-# --- 2. SETUP TOOLCHAIN ---
-# Automatically find the version folder (e.g., clang-r522817)
-CLANG_VERSION=$(ls clang | grep clang-r | head -n 1)
-export PATH="$(pwd)/clang/$CLANG_VERSION/bin:$PATH"
+# --- ENV SETUP ---
 export ARCH=arm64
 export SUBARCH=arm64
+export PATH="$CLANG_PATH/bin:$PATH"
+export KBUILD_COMPILER_STRING=$(clang --version | head -n 1)
+
+# --- PREPARE ---
+echo ">>> Cloning Sources..."
+git clone --depth=1 $KERNEL_REPO kernel
+git clone --depth=1 $AK3_REPO anykernel
 
 cd kernel
 
-# --- 3. DETECT DEFCONFIG ---
-# We prioritize kona-perf because it is the standard for SM8250
-if [ -f "arch/arm64/configs/vendor/kona-perf_defconfig" ]; then
-    DEFCONFIG="vendor/kona-perf_defconfig"
-elif [ -f "arch/arm64/configs/kona-perf_defconfig" ]; then
-    DEFCONFIG="kona-perf_defconfig"
-else
-    # Fallback: Just grab the first config that looks like a vendor perf config
-    DEFCONFIG=$(find arch/arm64/configs -name "*perf_defconfig" | head -n 1 | xargs basename)
-fi
-
-echo "--- Building with Config: $DEFCONFIG ---"
-
-# --- 4. COMPILE ---
-make O=out $DEFCONFIG
-
-# LLVM=1 handles all tools (ar, nm, objcopy) automatically
-make -j$(nproc) O=out \
+# --- COMPILE ---
+echo ">>> Starting Compilation..."
+make O=../out $DEFCONFIG
+make -j$(nproc) O=../out \
     CC=clang \
     LLVM=1 \
     LLVM_IAS=1 \
@@ -53,19 +29,22 @@ make -j$(nproc) O=out \
     CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
     DTC=dtc
 
-# --- 5. PACKAGE ---
-if [ -f "out/arch/arm64/boot/Image.gz-dtb" ]; then
-    echo "--- Build Success! Packaging... ---"
-    cp out/arch/arm64/boot/Image.gz-dtb ../anykernel/
-    cd ../anykernel
+# --- PACKAGING ---
+if [ -f "../out/arch/arm64/boot/Image" ]; then
+    echo ">>> Packaging with AnyKernel3..."
+    cp ../out/arch/arm64/boot/Image ../anykernel/
     
-    # Disable device check so it flashes on any V60 variant
+    # Correctly grab the DTB for SM8250
+    find ../out/arch/arm64/boot/dts/vendor/qcom/ -name "*.dtb" -exec cp {} ../anykernel/dtb \;
+    
+    cd ../anykernel
+    # Disable device check for easier flashing across V60 variants
     sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
     
-    zip -r9 ../../LGV60-Kernel.zip *
-    echo "--- DONE: LGV60-Kernel.zip is ready ---"
+    zip -r9 ../../LGV60-Jhatpat-Kernel.zip *
+    echo ">>> ZIP Created Successfully!"
 else
-    echo "!!! Build Failed: Image.gz-dtb not found !!!"
+    echo "!!! Build Failed: Kernel Image not found !!!"
     exit 1
 fi
 
