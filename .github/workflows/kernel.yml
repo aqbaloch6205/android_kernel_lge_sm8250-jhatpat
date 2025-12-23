@@ -1,32 +1,37 @@
-name: Build LG V60 Kernel
+name: Build LG V60 A16 Kernel
 on:
   workflow_dispatch:
 
 jobs:
-  kernel-build:
-    runs-on: ubuntu-22.04
+  build:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
-      - name: Install Exhaustive Dependencies
+      # --- FIX: Manually install Python 2.7 for Ubuntu 24.04 ---
+      - name: Setup Python 2.7
+        uses: actions/setup-python@v5
+        with:
+          python-version: '2.7'
+
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential bc bison flex libssl-dev libelf-dev \
-            git-core gnupg ccache lzop python-is-python3 python2 \
-            python3 python3-pip zip curl zlib1g-dev libncurses5-dev \
-            libgl1-mesa-dev g++-multilib libxml2-utils xsltproc \
-            unzip device-tree-compiler gcc-aarch64-linux-gnu \
-            gcc-arm-linux-gnueabi lld llvm clang libtool-bin \
-            automake autoconf libarchive-tools tar
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev \
+          git-core gnupg ccache lzop python-is-python3 \
+          python3-pip zip curl zlib1g-dev libncurses5-dev \
+          libgl1-mesa-dev g++-multilib libxml2-utils xsltproc \
+          unzip device-tree-compiler gcc-aarch64-linux-gnu \
+          gcc-arm-linux-gnueabi lld llvm clang libtool-bin \
+          automake autoconf libarchive-tools tar
 
       - name: Run Build Script
         run: bash build.sh
 
-      - name: Upload Kernel
+      - name: Upload Kernel ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: LGV60-Kernel-Flashable
+          name: LGV60-A16-Kernel
           path: LGV60-Kernel.zip
           
