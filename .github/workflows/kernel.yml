@@ -1,4 +1,4 @@
-name: Build LG V60 A16 Kernel
+name: Build LG V60 Kernel (Auto-Branch)
 on:
   workflow_dispatch:
 
@@ -6,16 +6,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Kernel Source
+      - name: Checkout Repo
         uses: actions/checkout@v4
 
-      # --- FIX: Manually install Python 2.7 for Ubuntu 24.04 ---
+      # --- FIX FOR UBUNTU 24.04: Manually Setup Python 2.7 ---
       - name: Setup Python 2.7
         uses: actions/setup-python@v5
         with:
           python-version: '2.7'
 
-      - name: Install Dependencies
+      - name: Install Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev \
@@ -32,6 +32,6 @@ jobs:
       - name: Upload Kernel ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: LGV60-A16-Kernel
+          name: LGV60-Jhatpat-Kernel
           path: LGV60-Kernel.zip
           
