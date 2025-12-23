@@ -1,7 +1,7 @@
 name: LG SM8250 Kernel Build
 
 on:
-  workflow_dispatch: # Allows you to start the build with a button click
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,28 +15,27 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential flex git libssl-dev libncurses5-dev zip python3
+          sudo apt-get install -y bc bison build-essential flex git libssl-dev \
+          libncurses5-dev zip python3 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
       - name: Fetch Toolchain
         run: |
-          # Cloning Proton Clang (optimized for Snapdragon 865)
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git toolchain
 
       - name: Detect Kernel Version
         id: info
         run: |
-          # Read versioning details directly from the Makefile
           V=$(grep "^VERSION =" Makefile | awk '{print $3}')
           P=$(grep "^PATCHLEVEL =" Makefile | awk '{print $3}')
           S=$(grep "^SUBLEVEL =" Makefile | awk '{print $3}')
-          EXTRA=$(grep "^EXTRAVERSION =" Makefile | awk '{print $3}')
-          echo "KVER=$V.$P.$S$EXTRA" >> $GITHUB_OUTPUT
+          echo "KVER=$V.$P.$S" >> $GITHUB_OUTPUT
 
       - name: Build Kernel
         env:
-          PATH: ${{ github.workspace }}/toolchain/bin:/usr/bin:/bin
+          # We place the system bin folder FIRST so the build uses the system's 'ld' (linker)
+          # while still using Proton Clang for the actual compilation.
+          PATH: /usr/bin:${{ github.workspace }}/toolchain/bin:/bin
         run: |
-          # Standard LG SM8250 Defconfig (Change if your device uses a specific one)
           DEFCONFIG="vendor/timelm_defconfig"
           
           export ARCH=arm64
@@ -46,13 +45,19 @@ jobs:
           # Initialize Config
           make O=out $DEFCONFIG
           
-          # Compile only the kernel image
+          # Compile
+          # Notice we explicitly tell it to use the system linker (LD=ld.lld or LD=ld)
           make -j$(nproc --all) O=out \
+               ARCH=arm64 \
                CC=clang \
+               LD=ld.lld \
+               AR=llvm-ar \
+               NM=llvm-nm \
+               OBJCOPY=llvm-objcopy \
+               OBJDUMP=llvm-objdump \
+               STRIP=llvm-strip \
                CROSS_COMPILE=$CROSS_COMPILE \
                CROSS_COMPILE_ARM32=$CROSS_COMPILE_ARM32 \
-               AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy \
-               OBJDUMP=llvm-objdump STRIP=llvm-strip \
                Image.gz
 
       - name: Upload Kernel Image
